@@ -19,7 +19,7 @@ function App() {
       const response = await fetch('/api/slots'); if (!response.ok) throw new Error('bad response');
       const data = await response.json();
       const heldNow = new Set(data.slots.filter(s => s.state === 'held' && tokens.has(s._id)).map(s => s._id));
-      for (const id of previousHeld.current) if (!heldNow.has(id)) { tokens.delete(id); const slot = data.slots.find(s => s._id === id); if (slot?.state !== 'booked') log(`Your hold on ${slot ? timeLabel(slot.startsAt) : id} expired or ended.`); }
+      for (const id of previousHeld.current) if (!heldNow.has(id)) { tokens.delete(id); const slot = data.slots.find(s => s._id === id); if (slot?.state !== 'booked') log(`Your hold on ${slot ? timeLabel(slot.startsAt) : id} expired.`); }
       previousHeld.current = heldNow;
       setSlots(data.slots); setServerTime(new Date(data.serverTime).getTime()); setOnline(true);
     } catch { setOnline(false); }
