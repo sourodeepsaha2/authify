@@ -1,0 +1,16 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f4f6f8; color: #202832; font: 15px/1.45 system-ui, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 48px; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+h1 { margin: 0; font-size: 27px; } header p { margin: 4px 0; color: #67727e; }
+.online { color: #16834a; } .offline { color: #b32f2f; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr)); gap: 12px; }
+.slot { background: white; border: 1px solid #d8dfe5; border-left: 5px solid #85929e; border-radius: 7px; padding: 14px; min-height: 112px; }
+.slot.free { border-left-color: #26a269; } .slot.held { border-left-color: #e1a328; } .slot.booked { border-left-color: #6575c7; }
+.slothead { display: flex; align-items: center; justify-content: space-between; }
+.badge { text-transform: uppercase; font-size: 11px; font-weight: 700; color: #56616c; }
+.slot p { margin: 8px 0; font-size: 13px; }
+button { border: 0; border-radius: 4px; padding: 7px 11px; background: #235bb3; color: white; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; } button.secondary { background: #65717c; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } input { width: 100%; min-width: 100px; border: 1px solid #c7d0d8; border-radius: 4px; padding: 7px; }
+aside { margin-top: 24px; padding: 16px; background: white; border: 1px solid #d8dfe5; border-radius: 7px; } aside h2 { margin: 0 0 8px; font-size: 17px; } aside p { margin: 0; color: #67727e; } ul { list-style: none; padding: 0; margin: 0; } li { padding: 5px 0; font-size: 13px; border-top: 1px solid #edf0f2; } time { color: #68737f; font-variant-numeric: tabular-nums; }
