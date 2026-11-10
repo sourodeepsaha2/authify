@@ -1,34 +1,35 @@
 # Decisions
 
-## What I chose
+## Assumptions
 
-MongoDB's conditional update is the arbiter. A hold succeeds only when the slot is free or its previous hold has expired, all in the filter of one single-document update. MongoDB serializes competing writes to that document, so the losing desk sees a conflict. This keeps the correctness rule beside the data and avoids a separate locking service. The official Node driver keeps the data path small and visible.
+1. **One doctor's day is enough.** I modeled one doctor and 20 half-hour slots on one day. That keeps the project focused on the required collision problem rather than expanding into scheduling across doctors and dates.
+2. **Receptionists are trusted.** I did not add login or roles because authentication is out of scope. A desk label identifies a browser tab for display; it is not a security identity.
+3. **A 90-second hold is an acceptable interruption window.** I chose hold-on-click so two receptionists cannot both start the same booking. An abandoned slot can remain held for up to 90 seconds; the server clock determines expiry, and a sweeper only clears slots still marked held.
+4. **A slot is the unit of concurrency.** Each decision changes one slot document, and the clinic has three or four desks. MongoDB's conditional atomic update and one-second polling are enough for this scale; cross-document transactions and a separate lock service are not needed.
 
-The setup has three runtime pieces: a standalone MongoDB, a small Express API, and a static React board served by nginx. Docker Compose starts them together. No replica set is needed: every decision touches one slot document, so multi-document transactions and replica-set setup add no value here.
+## What I chose and why
 
-## Alternatives considered
+I used React with Vite, Node and Express, MongoDB's official Node driver, and Docker Compose. MongoDB's conditional update is the arbiter: a hold succeeds only if the slot is free or its previous hold has expired. The condition and state change happen together on one document, so two requests cannot both claim that slot. A standalone MongoDB is sufficient; no replica set is needed for these single-document updates.
 
-- Read, check, then write in application code can let two requests read “free” before either writes. The deliberately unsafe demo endpoint exposes this failure.
-- Redis/Redlock adds a second state system, lock expiry and failure modes; the slot document already supports the needed atomic condition.
-- MongoDB transactions coordinate multiple documents, while this decision changes one document.
-- A unique-index trick would need extra lock/claim records and cleanup. A conditional update directly expresses the slot state transition.
-- Websockets add connection management. One-second polling is adequate for three or four desks and easier to operate.
-- Lock-on-confirm lets two desks start the same booking and creates a late loser. Hold-on-click settles contention before patient entry.
+The one-time setup cost was installing Docker Desktop and downloading/building the service images. Compose then brings up MongoDB, the API, and the React board with one command. The board polls once a second, which is simple to run and meets the expected update time for a few desks.
 
-## Hold-on-click tradeoff and assumptions
+## What I considered and rejected
 
-A free-slot click starts a 90-second hold. This prevents two desks from beginning the same booking and avoids a confirm-time surprise. The cost is that an interrupted receptionist can strand a slot until the hold expires, at most 90 seconds. `HOLD_TTL_SECONDS` controls the duration. Trusted users share one doctor/day board; the server clock is the only expiry clock. The server validates tokens, but this is not an authentication system.
+- **Read, check, then write in application code:** two requests can both read "free" before either writes. The deliberately unsafe demo route demonstrates this failure.
+- **Redis/Redlock:** it would add another state system and lock-expiry failure modes when MongoDB can settle the race directly.
+- **MongoDB transactions:** they coordinate multiple documents, but a slot transition changes one document.
+- **A unique-index workaround:** it would require extra claim records and cleanup; the conditional update directly expresses the state change.
+- **Websockets:** they add connection management when one-second polling is adequate here.
+- **Lock-on-confirm:** two desks could both start the booking and one would lose at the final step. Hold-on-click avoids that surprise but can temporarily strand a slot when someone is interrupted.
 
-## Growth and next steps
+## What I would do next
 
-At ten times the traffic, a single MongoDB node may become a throughput or availability limit. One-second polling multiplies reads by every open tab; I would move updates to MongoDB change streams exposed through SSE. A hot slot can still attract serialized contention. Multiple doctors would require a doctor-aware query and likely a shard key chosen around the workload. I would next add operational metrics, request limits, and a deployment topology appropriate to the required availability.
+At ten times the traffic, I would measure the polling load and the capacity and availability of a single MongoDB node first. Popular slots can also become contention hotspots. If measurements required it, I would improve database availability and consider change streams with SSE. Supporting multiple doctors would require revisiting query patterns and the shard key. I would also add browser-level end-to-end tests and operational metrics.
 
 ## Bugs found while building / AI mistakes caught
 
-TODO: Add the bugs found during your own review and any AI mistakes you caught.
+The first AI-generated confirm-race check sent competing attempts one after another. That looked like a race test but did not create overlapping requests. Reviewing it against the requirement showed the gap, so the check was changed to send both attempts concurrently with `Promise.all`. The final race script passed with two and four contenders; the intentionally unsafe route showed multiple winners.
 
-## Personal notes
+## Time and personal note
 
-TODO: Add your hours spent.
-
-TODO: Add your own thoughts about the project and tradeoffs.
+I estimate I spent 10-20 hours on the project, including setup, implementation, testing, and preparing the submission. My main takeaway is that the race needs to be tested directly: a single-user click-through would not reveal the read-then-write failure. The conditional update keeps the correctness rule small and close to the slot data.
