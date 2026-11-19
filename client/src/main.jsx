@@ -12,6 +12,7 @@ function App() {
   const [online, setOnline] = useState(false);
   const [events, setEvents] = useState([]);
   const [patient, setPatient] = useState({});
+  const [races, setRaces] = useState({});
   const previousHeld = useRef(new Set());
   const log = useCallback(message => setEvents(items => [{ id: Date.now() + Math.random(), message, at: new Date().toLocaleTimeString() }, ...items].slice(0, 12)), []);
   const poll = useCallback(async () => {
@@ -36,6 +37,49 @@ function App() {
       tokens.set(slot._id, data.holdToken); previousHeld.current.add(slot._id); update(data.slot); log(`Hold on ${timeLabel(slot.startsAt)} acquired.`);
     } catch { await poll(); log(`Could not hold ${timeLabel(slot.startsAt)}; server unreachable.`); }
   }
+  async function raceHold(slot) {
+    const id = slot._id;
+    setRaces(current => ({ ...current, [id]: { running: true, results: [] } }));
+    log(`Race started: Demo Desk A and Demo Desk B are competing for ${timeLabel(slot.startsAt)}.`);
+    try {
+      const results = await Promise.all(['Demo Desk A', 'Demo Desk B'].map(async heldBy => {
+        const response = await fetch(`/api/slots/${id}/hold`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ heldBy })
+        });
+        return { desk: heldBy, status: response.status, body: await response.json().catch(() => ({})) };
+      }));
+      const winner = results.find(result => result.status === 200);
+      setRaces(current => ({ ...current, [id]: { running: false, results, winner: winner || null } }));
+      await poll();
+      const losing = results.find(result => result.status === 409);
+      if (winner && losing) log(`${winner.desk} won ${timeLabel(slot.startsAt)}; ${losing.desk} received 409 Conflict.`);
+      else log(`Race finished for ${timeLabel(slot.startsAt)}. Check the outcomes on the slot card.`);
+    } catch {
+      setRaces(current => ({ ...current, [id]: { running: false, results: [], error: true } }));
+      await poll();
+      log(`Could not complete the two-desk race for ${timeLabel(slot.startsAt)}.`);
+    }
+  }
+  async function releaseRaceHold(slot) {
+    const race = races[slot._id];
+    if (!race?.winner?.body?.holdToken) return;
+    try {
+      const response = await fetch(`/api/slots/${slot._id}/release`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ holdToken: race.winner.body.holdToken })
+      });
+      if (!response.ok) throw new Error('release_failed');
+      setRaces(current => ({ ...current, [slot._id]: { ...current[slot._id], winner: null } }));
+      await poll();
+      log(`Released the demo hold on ${timeLabel(slot.startsAt)} so you can run the race again.`);
+    } catch {
+      await poll();
+      log(`Could not release the demo hold on ${timeLabel(slot.startsAt)}.`);
+    }
+  }
   async function action(slot, kind) {
     const body = { holdToken: tokens.get(slot._id) };
     if (kind === 'confirm') body.patientName = patient[slot._id] || '';
@@ -55,8 +99,9 @@ function App() {
       return <article key={slot._id} className={`slot ${slot.state}`}><div className="slothead"><b>{timeLabel(slot.startsAt)}</b><span className="badge">{slot.state}</span></div>
         {slot.state === 'held' && <p>{own ? 'Held by you' : `Held by ${slot.heldBy}`} {seconds > 0 && `· ${seconds}s`}</p>}
         {slot.state === 'booked' && <p>Booked · {slot.patientName}</p>}
-        {slot.state === 'free' && <button onClick={() => hold(slot)}>Hold slot</button>}
+        {slot.state === 'free' && <div className="actions"><button onClick={() => hold(slot)}>Hold slot</button><button className="secondary" disabled={races[slot._id]?.running} onClick={() => raceHold(slot)}>{races[slot._id]?.running ? 'Racing…' : 'Simulate two desks'}</button></div>}
         {own && <div className="actions"><input aria-label="Patient name" placeholder="Patient name" value={patient[slot._id] || ''} onChange={e => setPatient({ ...patient, [slot._id]: e.target.value })}/><button onClick={() => action(slot, 'confirm')} disabled={!(patient[slot._id] || '').trim()}>Confirm</button><button className="secondary" onClick={() => action(slot, 'release')}>Release</button></div>}
+        {races[slot._id] && <div className="race-result" aria-live="polite"><b>Two-desk race</b>{races[slot._id].running ? <p>Both hold requests were sent concurrently…</p> : races[slot._id].error ? <p>Could not reach the server. Check the connection and try again.</p> : <><ul>{races[slot._id].results.map(result => <li key={result.desk}><b>{result.desk}:</b> {result.status === 200 ? '200 — hold won' : result.status === 409 ? '409 — slot taken' : `${result.status} — request failed`}</li>)}</ul>{races[slot._id].winner && <button className="secondary" onClick={() => releaseRaceHold(slot)}>Release demo hold</button>}</>}</div>}
       </article>;
     })}</section>
     <aside><h2>Recent activity</h2>{events.length ? <ul>{events.map(event => <li key={event.id}><time>{event.at}</time> {event.message}</li>)}</ul> : <p>Actions and hold expiry will appear here.</p>}</aside>

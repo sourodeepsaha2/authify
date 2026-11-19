@@ -110,14 +110,14 @@ docker compose run --rm --entrypoint node race scripts/seed.js
 
 Both commands use the MongoDB connection provided to the Compose service. They do not require a manually supplied URI.
 
-## Demo two desks
+## Demonstrate two desks racing from the browser
 
-1. Start Compose and open **http://localhost:8080** in two browser tabs.
-2. Check that the tabs show different desk labels.
-3. Hold a free slot in one tab. The other tab should show it as held within about one second.
-4. Try to hold that slot from the other tab. It should be rejected and the UI should show the server’s state.
-5. Confirm with a patient name or release the hold.
-6. For a repeatable simultaneous race, use `docker compose run --rm race` in a second Terminal as described above.
+1. Start Compose and open **http://localhost:8080**.
+2. On a free slot, click **Simulate two desks**. The browser sends two hold requests concurrently to the normal Express hold route, labeled `Demo Desk A` and `Demo Desk B`.
+3. The slot card shows each response. The expected result is one `200 — hold won` and one `409 — slot taken`; polling updates the board to show the winning hold.
+4. Click **Release demo hold** to return the slot to free and repeat the demonstration.
+
+This is a visible, repeatable demonstration, not authentication. The assignment intentionally has no login. To show two independent board sessions manually, open the board in two browser tabs (or browser profiles); each tab has its own desk label and polls the same API. For a larger repeated race, use `docker compose run --rm race` in a second Terminal.
 
 ## Configuration
 
